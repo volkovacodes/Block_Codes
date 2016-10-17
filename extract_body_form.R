@@ -13,10 +13,11 @@ html2txt <- function(file) {
 get_body <- function(webpage){
   webpage <- unlist(strsplit(webpage, "\n"))
   file.name <- gsub("<FILENAME>","",grep("<FILENAME>.*$", webpage,  perl=TRUE, value=TRUE))
-  if(length(file.name) == 0) return(NA)
-  file.ext <- tolower(gsub(".*\\.(.*?)$", "\\1", file.name[1]))
   start.line <- grep("<DOCUMENT>.*$", webpage,  perl=TRUE)
   end.line <- grep("</DOCUMENT>.*$", webpage,  perl=TRUE) 
+  if(length(file.name) == 0) return(paste0(webpage[start.line:end.line], collapse = "\n"))
+  file.ext <- tolower(gsub(".*\\.(.*?)$", "\\1", file.name[1]))
+  
   if(length(start.line)*length(end.line) == 0) return(NA)
   start.line <- start.line[1]
   end.line <- end.line[1]
@@ -96,7 +97,7 @@ for(cyear in 1996:2016)
   
   files <- dbGetQuery(con, 'SELECT FILENAME FROM compsubm')
   N <- length(files$FILENAME)
-  step <- 1000
+  step <- 5000
   
   for(i in 1:(N %/% step + 1))
   {
