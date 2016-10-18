@@ -14,6 +14,7 @@ annual.master.file <- function(year)
     print(sprintf("Downloading master file for quarter %d of year %s...", i, year))
     master <- readLines(url(name))
     master <- master[grep("SC 13(D|G)", master)]
+    master <- gsub("#", "", master) # R does not treat a comment sign well
     master_table <- read.table(textConnection(master), sep = "|")
     rm(master)
     colnames(master_table) <- c("cik", "name", "type", "date", "link")
