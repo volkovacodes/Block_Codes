@@ -15,10 +15,10 @@ get_body <- function(webpage){
   file.name <- gsub("<FILENAME>","",grep("<FILENAME>.*$", webpage,  perl=TRUE, value=TRUE))
   start.line <- grep("<DOCUMENT>.*$", webpage,  perl=TRUE)
   end.line <- grep("</DOCUMENT>.*$", webpage,  perl=TRUE) 
+  if(length(start.line)*length(end.line) == 0) return(NA)
   if(length(file.name) == 0) return(paste0(webpage[start.line:end.line], collapse = "\n"))
   file.ext <- tolower(gsub(".*\\.(.*?)$", "\\1", file.name[1]))
-  
-  if(length(start.line)*length(end.line) == 0) return(NA)
+
   start.line <- start.line[1]
   end.line <- end.line[1]
   if (file.ext %in% c("htm", "xls", "xlsx", "js", "css", "paper", "xsd")) 
@@ -26,8 +26,8 @@ get_body <- function(webpage){
     temp <- webpage[start.line:end.line]
     pdf.start <- grep("^<TEXT>", temp,  perl=TRUE) +1
     pdf.end <- grep("^</TEXT>", temp,  perl=TRUE) -1  
-    res <- try(text <- html2txt(temp[pdf.start:pdf.end]))
-    if(class(res) == "try-error") text <- NA
+    res <- try(text <- html2txt(temp[pdf.start:pdf.end]),silent = T)
+    if(class(res) == "try-error") text <- temp[pdf.start:pdf.end]
     
   }
   if (file.ext=="txt") 
@@ -80,16 +80,9 @@ get_fil <- function(webpage){
   fil_info <- paste0(fil_info, collapse = "\n")
   return(fil_info)
 }
-
-
-for(cyear in 1996:2016)
+### here I put files in to SQL
+put.into.db <- function(name_out, master, con)
 {
-  sec <- fread("sec.csv")
-  year_sec <- sec[year == cyear]  
-  rm(sec)
-  dbname <- paste0(cyear, ".sqlite")
-  con = dbConnect(SQLite(), dbname = dbname)
-  name_out <- paste0("sc13_", cyear, ".sqlite")
   con_out <- dbConnect(SQLite(), name_out)
   dbSendQuery(conn = con_out, 
               "CREATE TABLE filings
@@ -123,12 +116,22 @@ for(cyear in 1996:2016)
     df$SBJ <- unlist(sbj_text)
     df$FIL <- unlist(fil_text)
     ### add link to a filing webpage
-    df$LINK <- year_sec$address[match(df$FILENAME, year_sec$file)]
-    
+    df$LINK <- master$address[match(df$FILENAME, year_sec$file)]
     dbWriteTable(con_out, name = "filings", df, append = T)
   }
   
   dbDisconnect(con_out)
+  return(1)
+}
+
+for(cyear in 2011:2015)
+{
+  master <- fread(paste0("master_", cyear, ".csv"))
+  master[, address := paste0(gsub("(-)|(.txt)","",link),"/",file)]
+  dbname <- paste0(cyear, ".sqlite")
+  con = dbConnect(SQLite(), dbname = dbname)
+  name_out <- paste0("sc13_", cyear, ".sqlite")
+  put.into.df(name_out, master, con)
   dbDisconnect(con)
 }
 

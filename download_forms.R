@@ -77,7 +77,9 @@ for(year in 2001:2003)
 {
   master <- annual.master.file(year)
   write.csv(master, paste0("master_", year, ".csv"))
+  print("Dowloading files, it takes ~ 4 hours")
   dwnld.files(master)
+  print("Putting all files into SQL & cleaning")
   put.files.in.sql(paste0(year, ".sqlite"))
 }
 
