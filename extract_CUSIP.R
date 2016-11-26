@@ -5,7 +5,7 @@ require(dplyr)
 ### directory with SQL files
 dir_in <- "./Blockholders/SC13_Clean_Filings/"
 ### directory where to write resuls
-dit_out <- "./Blockholders/"
+dir_out <- "./Blockholders/"
 ### regex to extract CUSIP from filing
 extract_CUSIP <- function(EFiling)
 {
@@ -39,17 +39,11 @@ CUSIP_table <- function(CUSIP)
   CUSIP_df[, CUSIP := toupper(CUSIP)]
   CUSIP_df[, CUSIP6 := substr(CUSIP,1,6)]
   CUSIP_df[, CUSIP := substr(CUSIP,1,8)]
-  CUSIP_df$CIK <- str_extract(res1$SBJ, "(?<=INDEX KEY:\t\t\t).*(?=\n)")
-  CUSIP_df$SEC_CIK_Name <- str_extract(res1$SBJ, "(?<=COMPANY CONFORMED NAME:\t\t\t).*(?=\n)")
-  CUSIP_df <- CUSIP_df[!duplicated(CUSIP_df)]
-  CUSIP_df <- CUSIP_df[!is.na(CUSIP_df$CUSIP6)]
-  CUSIP_df <- CUSIP_df[!grepl("0000", CUSIP)]
-  setcolorder(CUSIP_df, c("year", "CIK", "SEC_CIK_Name","CUSIP", "CUSIP6"))
   return(CUSIP_df)
 }
 
 CUSIP_all <- NULL
-for(ind_year in 1995:2015)
+for(ind_year in 1994:2015)
 {
   dbname <- paste0(dir_in, "sc13_", ind_year, ".sqlite")
   ## connect to db
@@ -57,14 +51,18 @@ for(ind_year in 1995:2015)
   ## Fetch data into data frame
   res <- dbSendQuery(con, "SELECT * FROM filings")
   res1 <- dbFetch(res,n=-1)
-
   
+  sec_name <- paste0(dir_out, "SEC_header_", ind_year, ".csv")
+  sec_header <- fread(sec_name)
+  match <- match(sec_header$FILENAME, res1$FILENAME)
   CUSIP <- extract_CUSIP(res1$FILING)
   CUSIP_df <- CUSIP_table(CUSIP)
-  CUSIP_all <- rbind(CUSIP_all, CUSIP_df)
+  sec_header$CUSIP <- CUSIP_df$CUSIP[match]
+  sec_header$CUSIP6 <- CUSIP_df$CUSIP6[match]
+  write.csv(sec_header, sec_name, row.names = F)
   dbDisconnect(con)
 }
 
-write.csv(CUSIP_all, paste0(dit_out, "CIK_CUSIP.csv"))
+#write.csv(CUSIP_all, paste0(dit_out, "CIK_CUSIP.csv"))
 
 
