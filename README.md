@@ -10,6 +10,11 @@
 - extract_body_form.R extracts main filing from complete submission files and convert .htm to plain text format if need.
 - I put output into another SQL database. 
 
-# Step 3. Extract CUSIP from the Filings.
+# Step 3. Parse SEC Header.
+- pasing_SEC_header.R extracts filer and subject information from the form
+- This script could be used for data extraction from other forms
+- I have a blog entry about this function (https://orhahog.wordpress.com/2016/11/26/parsing-sec-header/)
+
+# Step 4. Extract CUSIP from the Filings.
 - extract_CUSIP.R script returns six and eight digit CUSIP from SEC filings.
 - Output of this part is a CIK-CUSIP map, which could be downloaded in .csv format from my website (www.evolkova.info)
