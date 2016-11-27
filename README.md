@@ -15,6 +15,9 @@
 - This script could be used for data extraction from other forms
 - I have a blog entry about this function (https://orhahog.wordpress.com/2016/11/26/parsing-sec-header/)
 
-# Step 4. Extract CUSIP from the Filings.
+# Step 4. Extract CUSIP from the filings.
 - extract_CUSIP.R script returns six and eight digit CUSIP from SEC filings.
 - Output of this part is a CIK-CUSIP map, which could be downloaded in .csv format from my website (www.evolkova.info)
+
+# Step 5. Extract size of the block positon.
+- parsing_prc_position.R extracts the aggregate block size from the filing.
