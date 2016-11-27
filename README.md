@@ -21,3 +21,7 @@
 
 # Step 5. Extract size of the block positon.
 - parsing_prc_position.R extracts the aggregate block size from the filing.
+
+# Step 6. Extract identity of blockholders.
+- parsing_block_identity.R extracts identity of blockholders from the information in the question 12.
+- here is the list of all identities (https://www.law.cornell.edu/cfr/text/17/240.13d-102)
