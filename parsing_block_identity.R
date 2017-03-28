@@ -1,8 +1,24 @@
+dir_in <- "/Volumes/ORHAHOG_USB/Blocks/Clean Forms/"
+dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
+start_year <- 1994
+start_QTR <- 1
+
+end_year <- 2016
+end_QTR <- 4
 require(RSQLite)
 require(data.table)
-dir_in <- "./Blockholders/SC13_Clean_Filings/"
-dir_out <- "./Blockholders/"
-
+### generate sequence of quaters 
+get_dates <- function(start_year, start_QTR, end_year, end_QTR)
+{
+  require(data.table)
+  all_dates <- data.table(year = rep(1993:2050, 4))
+  setkey(all_dates,year)
+  all_dates[, QTR := 1:.N, by = year]
+  all_dates <- as.data.frame(all_dates)
+  
+  x <- paste0(all_dates$year, all_dates$QTR) >= paste0(start_year, start_QTR) & paste0(all_dates$year, all_dates$QTR) <= paste0(end_year, end_QTR)
+  return(all_dates[x,])
+}
 ### list of all identities codes
 code_list <- c("bd", "bk", "ic", "iv", "ia", "ep", "hc", "sa", "cp", "co", "pn", "in", "fi", "oo")
 ### I general regex to capture all variation of identity codes
@@ -18,7 +34,7 @@ gen_codes_regex <- function()
   codes[[7]] <- c("holding\\s+company", "hc")
   codes[[8]] <- c("savings\\s+association", "sa")
   codes[[9]] <- c("church\\s+plan", "cp")
-  codes[[10]] <- c("corporation", "co", "c0")
+  codes[[10]] <- c("corporation", "co\\s", "c0") ### company sometimes is catched as corporation
   codes[[11]] <- c("partnership", "pn")
   codes[[12]] <- c("individual", "in", "in")
   codes[[13]] <- c("non-U.S.\\s+institution", "fi")
@@ -98,19 +114,23 @@ get_phares_one_line <- function(text)
   return(item12)
 }
 
-for(ind_year in 1994:2015)
+
+dates <- get_dates(start_year, start_QTR, end_year, end_QTR)
+dates$year_QTR <- paste0(dates$year, dates$QTR)
+for(yearqtr in dates$year_QTR)
 {
-  print(ind_year)
   print(Sys.time())
+  print(yearqtr)
   
   ### read master file
-  sec_name <- paste0(dir_out, "SEC_header_", ind_year, ".csv")
+  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".csv")
   sec_header <- fread(sec_name)
   
   ### read filings
-  dbname <- paste0(dir_in,"sc13_", ind_year, ".sqlite")
+  dbname <- paste0(dir_in, "sc13_", yearqtr, ".sqlite")
   con <- dbConnect(drv=RSQLite::SQLite(), dbname=dbname)
-  res <- dbSendQuery(con, "SELECT * FROM filings")
+  ## Fetch data into data frame
+  res <- dbSendQuery(con, "SELECT FILENAME, FILING FROM filings")
   res1 <- dbFetch(res,n=-1)
   
   ### check the order just in case
@@ -122,9 +142,9 @@ for(ind_year in 1994:2015)
   ### fidelity has its own formatting
   sec_header$item12[sec_header$fil_CIK == "0000315066"] <- "hc|in"
   ### the match a majority with the first faster function
-  sec_header$item12[is.na(sec_header$item12)] <- unlist(lapply(res1$FILING[is.na(sec_header$item12)], get_phares))
+  sec_header$item12[is.na(sec_header$item12)] <- sapply(res1$FILING[is.na(sec_header$item12)], get_phares)
   ### the rest is match with more diligent but slower function
-  sec_header$item12[is.na(sec_header$item12)] <- unlist(lapply(res1$FILING[is.na(sec_header$item12)], get_phares_one_line))
+  sec_header$item12[is.na(sec_header$item12)] <- sapply(res1$FILING[is.na(sec_header$item12)], get_phares_one_line)
   print(mean(is.na(sec_header$item12)))
   write.csv(sec_header, sec_name, row.names = F)
 }

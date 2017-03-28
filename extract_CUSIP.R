@@ -1,11 +1,25 @@
+dir_in <- "/Volumes/ORHAHOG_USB/Blocks/Clean Forms/"
+dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
+start_year <- 1994
+start_QTR <- 1
+
+end_year <- 2016
+end_QTR <- 4
 require(RSQLite)
 require(stringr)
 require(dplyr)
-
-### directory with SQL files
-dir_in <- "./Blockholders/SC13_Clean_Filings/"
-### directory where to write resuls
-dir_out <- "./Blockholders/"
+### generate sequence of quaters 
+get_dates <- function(start_year, start_QTR, end_year, end_QTR)
+{
+  require(data.table)
+  all_dates <- data.table(year = rep(1993:2050, 4))
+  setkey(all_dates,year)
+  all_dates[, QTR := 1:.N, by = year]
+  all_dates <- as.data.frame(all_dates)
+  
+  x <- paste0(all_dates$year, all_dates$QTR) >= paste0(start_year, start_QTR) & paste0(all_dates$year, all_dates$QTR) <= paste0(end_year, end_QTR)
+  return(all_dates[x,])
+}
 ### regex to extract CUSIP from filing
 extract_CUSIP <- function(EFiling)
 {
@@ -33,7 +47,7 @@ CUSIP_table <- function(CUSIP)
 {
   require(data.table)
   CUSIP_df <- data.table(CUSIP)
-  CUSIP_df[, year := ind_year]
+  CUSIP_df[, quarter := yearqtr]
   CUSIP_df[, CUSIP := gsub("\\s", "", CUSIP)]
   CUSIP_df[, CUSIP := gsub("-", "", CUSIP)]
   CUSIP_df[, CUSIP := toupper(CUSIP)]
@@ -43,16 +57,20 @@ CUSIP_table <- function(CUSIP)
 }
 
 CUSIP_all <- NULL
-for(ind_year in 1994:2015)
+
+dates <- get_dates(start_year, start_QTR, end_year, end_QTR)
+dates$year_QTR <- paste0(dates$year, dates$QTR)
+
+for(yearqtr in dates$year_QTR)
 {
-  dbname <- paste0(dir_in, "sc13_", ind_year, ".sqlite")
+  dbname <- paste0(dir_in, "sc13_", yearqtr, ".sqlite")
   ## connect to db
   con <- dbConnect(drv=RSQLite::SQLite(), dbname=dbname)
   ## Fetch data into data frame
   res <- dbSendQuery(con, "SELECT * FROM filings")
   res1 <- dbFetch(res,n=-1)
   
-  sec_name <- paste0(dir_out, "SEC_header_", ind_year, ".csv")
+  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".csv")
   sec_header <- fread(sec_name)
   match <- match(sec_header$FILENAME, res1$FILENAME)
   CUSIP <- extract_CUSIP(res1$FILING)

@@ -1,7 +1,25 @@
-dir_in <- "./Blockholders/SC13_Clean_Filings/"
-dir_out <- "./Blockholders/"
+dir_in <- "/Volumes/ORHAHOG_USB/Blocks/Clean Forms/"
+dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
+start_year <- 1994
+start_QTR <- 1
+
+end_year <- 2016
+end_QTR <- 4
 
 require(RSQLite)
+require(stringr)
+### generate sequence of quaters 
+get_dates <- function(start_year, start_QTR, end_year, end_QTR)
+{
+  require(data.table)
+  all_dates <- data.table(year = rep(1993:2050, 4))
+  setkey(all_dates,year)
+  all_dates[, QTR := 1:.N, by = year]
+  all_dates <- as.data.frame(all_dates)
+  
+  x <- paste0(all_dates$year, all_dates$QTR) >= paste0(start_year, start_QTR) & paste0(all_dates$year, all_dates$QTR) <= paste0(end_year, end_QTR)
+  return(all_dates[x,])
+}
 ### parsing SEC header
 sec_header <- function(FILENAME, info)
 {
@@ -13,7 +31,7 @@ sec_header <- function(FILENAME, info)
   df$IRS <- str_extract(info, "(?<=IRS NUMBER:\t\t\t\t).*(?=\n)")
   df$INC_STATE <- str_extract(info, "(?<=STATE OF INCORPORATION:\t\t\t).*(?=\n)")
   df$FYEAR_END <- str_extract(info, "(?<=FISCAL YEAR END:\t\t\t).*(?=\n)")
-  df$FORM_TYPE <- str_extract(info, "(?<=FORM TYPE:\t\t).*(?=\n)")
+  # df$FORM_TYPE <- str_extract(info, "(?<=FORM TYPE:\t\t).*(?=\n)")
   ### get business address for the companies that have it
   ### I specify info[business] to distinguish between mail and business address
   business <- grepl("BUSINESS ADDRESS:", info)
@@ -23,29 +41,36 @@ sec_header <- function(FILENAME, info)
   df$business_address_state[business] <- str_extract(info[business], "(?<=STATE:\t\t\t).*(?=\n)")
   df$business_address_zip[business] <- str_extract(info[business], "(?<=ZIP:\t\t\t).*(?=\n)")
   df$business_address_phone[business] <- str_extract(info[business], "(?<=BUSINESS PHONE:\t\t).*(?=\n)")
+  df$FILENAME <- NULL
   return(df)
 }
 
-for(year in 1994:2015)
+dates <- get_dates(start_year, start_QTR, end_year, end_QTR)
+dates$year_QTR <- paste0(dates$year, dates$QTR)
+
+for(yearqtr in dates$year_QTR)
 {
-  dbname <- paste0(dir_in, "sc13_", year, ".sqlite")
+  print(Sys.time())
+  print(yearqtr)
+  dbname <- paste0(dir_in, "sc13_", yearqtr, ".sqlite")
   con <- dbConnect(drv=RSQLite::SQLite(), dbname=dbname)
   ## Fetch data into data frame
-  res <- dbSendQuery(con, "SELECT FILENAME, SBJ, FIL FROM filings")
+  res <- dbSendQuery(con, "SELECT FILENAME, SBJ, FIL, LINK, DATE, TYPE FROM filings")
   res1 <- dbFetch(res,n=-1)
   
+  out <- data.frame(FILENAME = res1$FILENAME, TYPE = res1$TYPE, 
+                    DATE = res1$DATE, LINK = res1$LINK)
   ### getting filer informaiton
   df <- sec_header(res1$FILENAME, res1$FIL)
-  colnames(df)[!colnames(df) %in% c("FILENAME", "FORM_TYPE")] <- 
-    paste0("fil_", colnames(df)[!colnames(df) %in% c("FILENAME", "FORM_TYPE")])
+  colnames(df) <- paste0("fil_", colnames(df))
   
   ### getting subject information
-  df_sbj <- sec_header(res1$FILENAME, res1$FIL)
+  df_sbj <- sec_header(res1$FILENAME, res1$SBJ)
   df_sbj$FILENAME <- NULL
   df_sbj$FORM_TYPE <- NULL
   colnames(df_sbj) <- paste0("sbj_", colnames(df_sbj))
   
-  out <- cbind(df, df_sbj)
-  write.csv(out, paste0(dir_out, "SEC_header_", year, ".csv"), row.names = F)
+  out <- cbind(out, df, df_sbj)
+  write.csv(out, paste0(dir_out, "Parsed_forms_", yearqtr, ".csv"), row.names = F)
 }
 

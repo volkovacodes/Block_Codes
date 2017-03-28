@@ -1,8 +1,27 @@
+start_year <- 2014
+start_QTR <- 1
+
+end_year <- 2015
+end_QTR <- 4
+wd <- "/Volumes/ORHAHOG_USB/Blocks/"
+setwd(wd)
 require(DBI)
 require(RSQLite)
 require(XML)
 require(data.table)
 require(stringr)
+get_dates <- function(start_year, start_QTR, end_year, end_QTR)
+{
+  require(data.table)
+  all_dates <- data.table(year = rep(1993:2050, 4))
+  setkey(all_dates,year)
+  all_dates[, QTR := 1:.N, by = year]
+  all_dates <- as.data.frame(all_dates)
+  
+  x <- paste0(all_dates$year, all_dates$QTR) >= paste0(start_year, start_QTR) & paste0(all_dates$year, all_dates$QTR) <= paste0(end_year, end_QTR)
+  return(all_dates[x,])
+}
+
 ### this function is taken from iangow github
 html2txt <- function(file) {
   library(XML)
@@ -86,11 +105,12 @@ put.into.db <- function(name_out, master, con)
   con_out <- dbConnect(SQLite(), name_out)
   dbSendQuery(conn = con_out, 
               "CREATE TABLE filings
-              (FILENAME TEXT, FILING TEXT, SBJ TEXT, FIL TEXT, LINK TEXT)")
+              (FILENAME TEXT, FILING TEXT, SBJ TEXT, FIL TEXT, LINK TEXT,
+              DATE TEXT, TYPE TEXT)")
   
   files <- dbGetQuery(con, 'SELECT FILENAME FROM compsubm')
   N <- length(files$FILENAME)
-  step <- 5000
+  step <- 10000
   
   for(i in 1:(N %/% step + 1))
   {
@@ -116,22 +136,28 @@ put.into.db <- function(name_out, master, con)
     df$SBJ <- unlist(sbj_text)
     df$FIL <- unlist(fil_text)
     ### add link to a filing webpage
-    df$LINK <- master$address[match(df$FILENAME, year_sec$file)]
+    df$LINK <- master$address[match(df$FILENAME, master$file)]
+    df$DATE <- master$date[match(df$FILENAME, master$file)]
+    df$TYPE <- master$type[match(df$FILENAME, master$file)]   
     dbWriteTable(con_out, name = "filings", df, append = T)
   }
   
   dbDisconnect(con_out)
   return(1)
 }
+dates <- get_dates(start_year, start_QTR, end_year, end_QTR)
+dates$year_QTR <- paste0(dates$year, dates$QTR)
 
-for(cyear in 2011:2015)
+for(yearqtr in dates$year_QTR)
 {
-  master <- fread(paste0("master_", cyear, ".csv"))
+  print(Sys.time())
+  print(yearqtr)
+  master <- fread(paste0("./Master/master_", yearqtr, ".csv"))
   master[, address := paste0(gsub("(-)|(.txt)","",link),"/",file)]
-  dbname <- paste0(cyear, ".sqlite")
+  dbname <- paste0("./Forms/",yearqtr, ".sqlite")
   con = dbConnect(SQLite(), dbname = dbname)
-  name_out <- paste0("sc13_", cyear, ".sqlite")
-  put.into.df(name_out, master, con)
+  name_out <- paste0("./Clean Forms/sc13_", yearqtr, ".sqlite")
+  put.into.db(name_out, master, con)
   dbDisconnect(con)
 }
 

@@ -1,8 +1,25 @@
+dir_in <- "/Volumes/ORHAHOG_USB/Blocks/Clean Forms/"
+dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
+start_year <- 1994
+start_QTR <- 1
+
+end_year <- 2016
+end_QTR <- 4
+
 require(RSQLite)
 require(data.table)
-dir_in <- "./Blockholders/SC13_Clean_Filings/"
-dir_out <- "./Blockholders/"
-
+### generate sequence of quaters 
+get_dates <- function(start_year, start_QTR, end_year, end_QTR)
+{
+  require(data.table)
+  all_dates <- data.table(year = rep(1993:2050, 4))
+  setkey(all_dates,year)
+  all_dates[, QTR := 1:.N, by = year]
+  all_dates <- as.data.frame(all_dates)
+  
+  x <- paste0(all_dates$year, all_dates$QTR) >= paste0(start_year, start_QTR) & paste0(all_dates$year, all_dates$QTR) <= paste0(end_year, end_QTR)
+  return(all_dates[x,])
+}
 ### extract lines around where to search for information
 get.lines <- function(x)
 {
@@ -95,22 +112,22 @@ get.max.prc <- function(x)
   return(max(x,na.rm = T))
 }
 
-for(ind_year in 1994:2015)
+
+dates <- get_dates(start_year, start_QTR, end_year, end_QTR)
+dates$year_QTR <- paste0(dates$year, dates$QTR)
+for(yearqtr in dates$year_QTR)
 {
-  print(ind_year)
   print(Sys.time())
-  
-  sec_name <- paste0(dir_out, "SEC_header_", ind_year, ".csv")
-  sec_header <- fread(sec_name)
-  
-  
-  dbname <- paste0(dir_in,"sc13_", ind_year, ".sqlite")
+  print(yearqtr)
+  dbname <- paste0(dir_in, "sc13_", yearqtr, ".sqlite")
   con <- dbConnect(drv=RSQLite::SQLite(), dbname=dbname)
   ## Fetch data into data frame
-  res <- dbSendQuery(con, "SELECT * FROM filings")
+  res <- dbSendQuery(con, "SELECT FILENAME, FILING FROM filings")
   res1 <- dbFetch(res,n=-1)
-  match <- match(sec_header$FILENAME, res1$FILENAME)
   
+  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".csv")
+  sec_header <- fread(sec_name)
+  match <- match(sec_header$FILENAME, res1$FILENAME)
   
   lines <- lapply(res1$FILING, get.lines)
   prc <- sapply(lines, get.prc)
@@ -123,5 +140,4 @@ for(ind_year in 1994:2015)
   sec_header$prc <- prc[match] ### I keep in just in case
   write.csv(sec_header, sec_name, row.names = F)
 }
-
 
