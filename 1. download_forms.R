@@ -6,6 +6,7 @@ end_QTR <- 4
 setwd("/Volumes/ORHAHOG_USB/Blocks/")
 require(data.table)
 require(Hmisc)
+require(data.table)
 
 ###########################################
 ####### construct SEC master file ########
@@ -18,7 +19,7 @@ qtr.master.file <- function(year, QTR)
   master <- readLines(url(name))
   master <- master[grep("SC 13(D|G)", master)]
   master <- gsub("#", "", master) # R does not treat a comment sign well
-  master_table <- read.table(textConnection(master), sep = "|")
+  master_table <- fread(textConnection(master), sep = "|")
   rm(master)
   colnames(master_table) <- c("cik", "name", "type", "date", "link")
   master_table <- as.data.table(master_table)
