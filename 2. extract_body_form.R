@@ -1,10 +1,13 @@
-start_year <- 2014
+start_year <- 2017
 start_QTR <- 1
 
-end_year <- 2015
+end_year <- 2018
 end_QTR <- 4
-wd <- "/Volumes/ORHAHOG_USB/Blocks/"
-setwd(wd)
+setwd("/Users/evolkova/Desktop/Blocks_2018/")
+require(data.table)
+require(Hmisc)
+require(data.table)
+
 require(DBI)
 require(RSQLite)
 require(XML)
@@ -37,7 +40,7 @@ get_body <- function(webpage){
   if(length(start.line)*length(end.line) == 0) return(NA)
   if(length(file.name) == 0) return(paste0(webpage[start.line:end.line], collapse = "\n"))
   file.ext <- tolower(gsub(".*\\.(.*?)$", "\\1", file.name[1]))
-
+  
   start.line <- start.line[1]
   end.line <- end.line[1]
   if (file.ext %in% c("htm", "xls", "xlsx", "js", "css", "paper", "xsd")) 
@@ -130,9 +133,8 @@ put.into.db <- function(name_out, master, con)
     df <- NULL
     df$FILENAME <- as.character(x$FILENAME)
     df <- as.data.frame(df)
-    body_text <- as.vector(body_text)
-    df$FILING <- unlist(body_text)
-    df$FILING  <- as.character(df$FILING)
+    body_text <- sapply(body_text, function(x) paste0(x, collapse = " "))
+    df$FILING  <- body_text
     df$SBJ <- unlist(sbj_text)
     df$FIL <- unlist(fil_text)
     ### add link to a filing webpage
@@ -160,4 +162,3 @@ for(yearqtr in dates$year_QTR)
   put.into.db(name_out, master, con)
   dbDisconnect(con)
 }
-
