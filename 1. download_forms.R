@@ -17,14 +17,16 @@ qtr.master.file <- function(year, QTR)
   name <- paste0("https://www.sec.gov/Archives/edgar/full-index/", year,"/QTR",QTR,"/master.idx")
   print(sprintf("Downloading master file for quarter %d of year %s...", QTR, year))
   master <- readLines(url(name))
-  master <- master[grep("SC 13(D|G)", master)]
   master <- gsub("#", "", master) # R does not treat a comment sign well
-  master_table <- fread(textConnection(master), sep = "|")
+  start_ind <- grep("CIK|Company Name", master)
+  master <- master[(start_ind+2):length(master)]
+  write(master, "tmp.csv")
+  master_table <- fread("tmp.csv", sep = "|")
   rm(master)
-  colnames(master_table) <- c("cik", "name", "type", "date", "link")
+  colnames(master_table) <- c("CIK", "Company_Name", "Form_Type", "Date_Filed", "Filename")
   master_table <- as.data.table(master_table)
-  master_table[, link := paste0("https://www.sec.gov/Archives/", link)]
-  master_table[, file := gsub(".*/", "", link)]
+  master_table[, Link := paste0("https://www.sec.gov/Archives/", Filename)]
+  file.remove("tmp.csv")
   closeAllConnections()
   return(master_table)
 }
