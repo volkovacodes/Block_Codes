@@ -1,8 +1,8 @@
-start_year <- 2016
+start_year <- 2017
 start_QTR <- 1
 
-end_year <- 2016
-end_QTR <- 4
+end_year <- 2018
+end_QTR <- 8
 setwd("/Volumes/ORHAHOG_USB/Blocks/")
 require(data.table)
 require(Hmisc)
@@ -18,14 +18,16 @@ qtr.master.file <- function(year, QTR)
   print(sprintf("Downloading master file for quarter %d of year %s...", QTR, year))
   master <- readLines(url(name))
   master <- gsub("#", "", master) # R does not treat a comment sign well
-  start_ind <- grep("CIK|Company Name", master)
+  start_ind <- grep("CIK|Company Name", master)[1]
   master <- master[(start_ind+2):length(master)]
   write(master, "tmp.csv")
   master_table <- fread("tmp.csv", sep = "|")
   rm(master)
-  colnames(master_table) <- c("CIK", "Company_Name", "Form_Type", "Date_Filed", "Filename")
+  colnames(master_table) <- c("cik", "name", "type", "date", "link")
   master_table <- as.data.table(master_table)
-  master_table[, Link := paste0("https://www.sec.gov/Archives/", Filename)]
+  master_table <- master_table[grep("SC 13(D|G)", type)]
+  master_table[, link := paste0("https://www.sec.gov/Archives/", link)]
+  master_table[, file := gsub(".*/", "", link)]
   file.remove("tmp.csv")
   closeAllConnections()
   return(master_table)
