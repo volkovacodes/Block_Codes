@@ -1,12 +1,13 @@
-dir <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
-dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Working Files/"
+dir <- "/Volumes/KINGSTON/Blocks/Parsed Forms/"
+dir_out <- "/Volumes/KINGSTON/Blocks/Working Files/"
 
 require(data.table)
 require(lubridate)
 ### reading all forms
 files <- list.files(dir)
+files <- files[grepl("rds", files)]
 forms <- NULL
-for(fl in files) forms <- rbind(forms, fread(paste0(dir, fl)))
+for(fl in files) forms <- rbind(forms, readRDS(paste0(dir, fl)))
 
 forms[, DATE := ymd(DATE)]
 forms[, FILING_YEAR := year(DATE)]
@@ -25,7 +26,7 @@ forms[, `:=` (cut_of_date = NULL, prc = NULL, FILING_YEAR = NULL)]
 forms <- forms[max_prc > 4.5 & !is.na(forms$fil_CIK)]
 forms[, dif := ymd(paste0(YEAR, "-01-01")) - DATE]
 setkey(forms, fil_CIK, sbj_CIK, YEAR, dif)
- 
+
 forms <- forms[!duplicated(paste0(fil_CIK, sbj_CIK, YEAR))]
 
 ### some of the companies do not file forms every year
@@ -51,9 +52,9 @@ last_year <- as.numeric(substr(last_year, 1 ,4)) - 1
 annual <- forms[YEAR <= last_year]
 
 ### matching permno and cusip to annual file
-load("./CRSP_COMP/CRSP_COMPUSTAT_1990_2016.rda")
-load("./CRSP_COMP/crsp_monthly_1990_2016.rda")
-
+comp <- fread("/Users/evolkova/Yandex.Disk.localized/Compustat/crsp_compustat_merger_annual.csv",
+              select = c("cik", "LPERMNO", "cusip", "fyear", "fyr"))
+crsp_monthly <- readRDS("/Users/evolkova/Yandex.Disk.localized/CRSP/MSF/CRSP_MSF.rds")
 match <- match(as.numeric(annual$sbj_CIK), comp$cik)
 annual$Permno <- comp$LPERMNO[match]
 annual$cusip_comp <- comp$cusip[match]
@@ -72,7 +73,8 @@ match <- match(annual$Permno, crsp_monthly$PERMNO)
 annual$sbj_cname_crsp <- crsp_monthly$COMNAM[match]
 
 ### mark institutional investors
-load("./CRSP_COMP/sec_master_1994_2015.rda")
+sec_master <- readRDS("/Users/evolkova/Yandex.Disk.localized/sec_master_13f_1994_2018.rds")
+colnames(sec_master) <- c("cik", "name", "form_type", "date", "filename", "link")
 setkey(annual, sbj_CIK, YEAR, fil_CIK)
 sec_master <- sec_master[grep("13F",sec_master$form_type)]
 sec_master[, year := year(date)]
@@ -109,6 +111,8 @@ annual[, `:=` (diversity_size = 1 - HHI_group), by = c("sbj_CIK", "YEAR")]
 annual[, `:=` (tmp1 = NULL, tmp2 = NULL, tmp3 = NULL, tmp4 = NULL, HHI_group = NULL)]
 
 ### turnover categories
+#fwrite(annual, "tmp.csv")
+#annual <- fread("tmp.csv")
 annual[ , stake_size := (max_prc-5)/100*marcap]
 annual[max_prc < 5 , stake_size := 0]
 
@@ -118,12 +122,12 @@ annual[ , delta.stake_size := stake_size - L.stake_size]
 annual[is.na(delta.stake_size), delta.stake_size := 0]
 
 annual[, top := sum(abs(delta.stake_size), na.rm = T), by = c("fil_CIK", "YEAR")]        
-annual[, bottom := 0.5*sum(stake_size, na.rm = T) +  0.5*sum(L.stake_size, na.rm = T), 
-        by = c("fil_CIK", "YEAR")] 
+annual[, bottom := 1*sum(stake_size, na.rm = T) +  0*sum(L.stake_size, na.rm = T), 
+       by = c("fil_CIK", "YEAR")] 
 annual[, turn := top/bottom]
 
 annual <- setDT(annual)[, turn_q := cut(turn, quantile(turn, probs=0:4/4, na.rm = T),
-                                         include.lowest=TRUE, labels=FALSE), by = YEAR]
+                                        include.lowest=TRUE, labels=FALSE), by = YEAR]
 
 
 annual[, `:=` (turn1 = 0, turn2 = 0, turn3  = 0, turn4 = 0)]
@@ -139,4 +143,4 @@ annual[, `:=` (stake_size = NULL, L.stake_size = NULL, delta.stake_size = NULL,
                top = NULL, bottom = NULL, turn = NULL, turn_q = NULL,
                tmp1 = NULL, tmp2 = NULL, tmp3 = NULL, tmp4 = NULL, HHI_group = NULL)]
 
-write.csv(annual, paste0(dir_out, "annual.csv"), row.names = F)
+fwrite(annual, paste0(dir_out, "annual.csv"))
