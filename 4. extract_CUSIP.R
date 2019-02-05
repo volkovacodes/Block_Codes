@@ -1,9 +1,9 @@
-dir_in <- "/Volumes/ORHAHOG_USB/Blocks/Clean Forms/"
-dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
+dir_in <- "/Volumes/KINGSTON/Blocks/Clean Forms/"
+dir_out <- "/Volumes/KINGSTON/Blocks/Parsed Forms/"
 start_year <- 1994
 start_QTR <- 1
 
-end_year <- 2016
+end_year <- 2018
 end_QTR <- 4
 require(RSQLite)
 require(stringr)
@@ -29,13 +29,13 @@ extract_CUSIP <- function(EFiling)
   
   # set pattern to extract CUSIP
   pat_2 <- "(?=\\d.*\\d)[a-zA-Z0-9]{9}|\\d\\w{6} \\w\\w \\w|\\d\\w{5} \\w\\w \\w|
-    [a-zA-Z0-9]{7}\\r|\\d\\w{5} \\w\\w\\w|(?=#.*\\d)[a-zA-Z0-9]{9}|(?=\\w\\d.*)[a-zA-Z0-9]{9}|
-    \\d\\w{5}-\\w\\w-\\w|\\d\\w{5}-\\w\\w\\w|\\d\\w{6}|\\d\\w{5}-\\w{2}-\\w|\\d\\w{5}\\n.*\\n.*|
-    \\d\\w{2} \\d\\w{2} \\d\\w{2}|\\d\\w{2} \\w{3} \\d{2} \\d|\\d{6} \\d{2} \\d|
-    \\d\\w{4} \\w{1} \\w{2} \\w|\\w{6} \\d{2} \\d{1}|\\d{3} \\d{3} \\d{3}|\\d{6} \\d{2} \\d{1}|
-    \\w{3} \\w{3} \\d{2} \\d{1}|\\w{5} \\w{1} \\d{2} \\d{1}|\\d{6} \\d{1} \\d{2}|
-    \\d{3} \\d{3} \\d{1} \\d{2}|\\d\\w{2}\\n.*\\d\\w{2}|\\d{6} \\d{2}\\n.*|\\d{5} \\d{2} \\d{1}|
-    \\d{5} \\w{1} \\w{2} \\w{1}|\\d\\w{5}|\\d\\w{2}-\\w{3}-\\w{3}"
+  [a-zA-Z0-9]{7}\\r|\\d\\w{5} \\w\\w\\w|(?=#.*\\d)[a-zA-Z0-9]{9}|(?=\\w\\d.*)[a-zA-Z0-9]{9}|
+  \\d\\w{5}-\\w\\w-\\w|\\d\\w{5}-\\w\\w\\w|\\d\\w{6}|\\d\\w{5}-\\w{2}-\\w|\\d\\w{5}\\n.*\\n.*|
+  \\d\\w{2} \\d\\w{2} \\d\\w{2}|\\d\\w{2} \\w{3} \\d{2} \\d|\\d{6} \\d{2} \\d|
+  \\d\\w{4} \\w{1} \\w{2} \\w|\\w{6} \\d{2} \\d{1}|\\d{3} \\d{3} \\d{3}|\\d{6} \\d{2} \\d{1}|
+  \\w{3} \\w{3} \\d{2} \\d{1}|\\w{5} \\w{1} \\d{2} \\d{1}|\\d{6} \\d{1} \\d{2}|
+  \\d{3} \\d{3} \\d{1} \\d{2}|\\d\\w{2}\\n.*\\d\\w{2}|\\d{6} \\d{2}\\n.*|\\d{5} \\d{2} \\d{1}|
+  \\d{5} \\w{1} \\w{2} \\w{1}|\\d\\w{5}|\\d\\w{2}-\\w{3}-\\w{3}"
   
   
   # Extract CUSIP from within the blocks extracted
@@ -70,17 +70,13 @@ for(yearqtr in dates$year_QTR)
   res <- dbSendQuery(con, "SELECT * FROM filings")
   res1 <- dbFetch(res,n=-1)
   
-  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".csv")
-  sec_header <- fread(sec_name)
+  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".rds")
+  sec_header <- readRDS(sec_name)
   match <- match(sec_header$FILENAME, res1$FILENAME)
   CUSIP <- extract_CUSIP(res1$FILING)
   CUSIP_df <- CUSIP_table(CUSIP)
   sec_header$CUSIP <- CUSIP_df$CUSIP[match]
   sec_header$CUSIP6 <- CUSIP_df$CUSIP6[match]
-  write.csv(sec_header, sec_name, row.names = F)
+  saveRDS(sec_header, sec_name)
   dbDisconnect(con)
 }
-
-#write.csv(CUSIP_all, paste0(dit_out, "CIK_CUSIP.csv"))
-
-
