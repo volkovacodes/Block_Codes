@@ -1,16 +1,19 @@
-dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Working Files/"
+dir_out <- "/Volumes/KINGSTON/Blocks/Working Files/"
 
 require(data.table)
 require(lubridate)
 
 annual <- fread(paste0(dir_out, "annual.csv"))
-load("./CRSP_COMP/crsp_monthly_1990_2016.rda")
+crsp_monthly <- fread("/Users/evolkova/Yandex.Disk.localized/CRSP/MSF/CRSP_MSF.csv",
+                      select = c("date", "EXCHCD", "PERMNO", "COMNAM", "NCUSIP", "CUSIP",
+                                 "PRC","SHROUT", "SICCD"))
 
 ###################################
 ### get all stock-year observations
 ###################################
 max_year <- as.numeric(max(annual$YEAR))
-tmp <- crsp_monthly[year(date) >= 1996 & year(date) <= max_year & month(date) == 12 & EXCHCD %in% 1:3]
+crsp_monthly[, date := ymd(date)]
+tmp <- crsp_monthly[year(date) >= 1994 & year(date) <= max_year & month(date) == 12 & EXCHCD %in% 1:3]
 
 stocks <- data.table(PERMNO = tmp$PERMNO, YEAR = year(tmp$date), CIK = NA, CNAME = tmp$COMNAM,
                      NCUSIP = tmp$NCUSIP, CUSIP = tmp$CUSIP, SIC = tmp$SICCD, PRC = abs(tmp$PRC),
@@ -24,7 +27,7 @@ rm(crsp_monthly)
 ######################################
 ### collect information from compustat
 ######################################
-load("./CRSP_COMP/CRSP_COMPUSTAT_1990_2016.rda")
+comp <- fread("/Users/evolkova/Yandex.Disk.localized/Compustat/crsp_compustat_merger_annual.csv")
 comp <- as.data.frame(comp)
 comp <- comp[comp$LPERMNO %in% stocks$PERMNO & !is.na(comp$at),]
 comp <- as.data.table(comp)
@@ -92,15 +95,13 @@ stocks <- stocks[ind & lead.ind]
 ###################################
 ### calculate amihud ##############
 ###################################
-load(, file = "./CRSP_COMP/CRSP_daily_1990_2016.rda")
-crsp_daily[,year := year(date)]
-crsp_daily <- crsp_daily[year >= 1996]
-for(cyear in 1996:2016)
+for(cyear in 1994:max_year)
 {
   ### requesting WRDS
   print(cyear)
   start <- Sys.time()
-  data <- crsp_daily[year == cyear]
+  data <- fread(paste0("/Users/evolkova/Yandex.Disk.localized/CRSP/DSF/CRSP_DSF_",cyear,".csv"),
+                select = c("PERMNO", "RET", "PRC", "VOL", "date"))
   end <- Sys.time()
   print(end - start)
   
@@ -115,7 +116,7 @@ for(cyear in 1996:2016)
   match <- match(stocks$PERMNO[stocks$YEAR == cyear], data$PERMNO)
   stocks$amihud[stocks$YEAR == cyear] <- data$amihud[match]
 }
-        
+
 ###################################
 #### get FF industries ############
 ###################################
@@ -162,24 +163,21 @@ match_FF <- function(sic_codes, file)
 
 stocks$FF_ind48 <- match_FF(stocks$SIC, "./CRSP_COMP/Siccodes48.txt")
 stocks$FF_ind12 <- match_FF(stocks$SIC, "./CRSP_COMP/Siccodes12.txt")
+stocks[is.na(FF_ind48), FF_ind48 := 48]
+stocks[is.na(FF_ind12), FF_ind12 := 12]
 stocks[, ind_year := paste(FF_ind48, YEAR)]
-rm(crsp_daily)
 
 ###################################
 #### inst ownership info  #########
 ###################################
-load(, file = "./CRSP_COMP/inst_hold_1990_2015.rda")
-inst_hold <- inst_hold[month(date) == 12]
-setkey(inst_hold, cusip, date, mgrno)
-inst_hold[, prc_own := 100*shares/shrout]
-inst_hold <- inst_hold[!is.infinite(prc_own) & !is.na(prc_own)]
-inst_hold[, inst_own := sum(prc_own, na.rm = T), by = c("date", "cusip")]
-inst_hold[inst_own > 100, inst_own := 100]
-inst_hold[, year := year(date)]
+inst_hold <- fread("/Users/evolkova/Yandex.Disk.localized/13F_1990_2017.csv")
+inst_hold <- inst_hold[month == 12]
 
-match <- match(paste(stocks$CUSIP, stocks$YEAR), paste(inst_hold$cusip, inst_hold$year))
-stocks$inst_hold <- inst_hold$inst_own[match]
+
+match <- match(paste(stocks$PERMNO, stocks$YEAR), paste(inst_hold$PERMNO, inst_hold$year))
+stocks$inst_hold <- inst_hold$InstOwnPrc[match]
 stocks$inst_hold[is.na(stocks$inst_hold)] <- 0
+stocks$inst_hold[(stocks$inst_hold) > 1] <- 1.0
 rm(inst_hold)
 ###################################
 #### block ownership info #########
@@ -191,85 +189,10 @@ stocks[, `:=` (num_block = annual$num_block[match], block_hold = annual$block_ho
                diversity_size = annual$diversity_size[match],
                diversity_turnover = annual$diversity_turnover[match])]
 stocks[is.na(match), `:=` (num_block = 0, block_hold = 0, diversity_identity = 0, 
-               diversity_size = 0, diversity_turnover = 0)]
-
-###################################
-########### INSTRUMENTS  ##########
-###################################
-
-###################################
-###### payout instrument ##########
-###################################
+                           diversity_size = 0, diversity_turnover = 0)]
 
 
-comp[, payout_gross := sum(na0(dvc),na0(prstkc), na.rm = T), by = c("LPERMNO", "fyear")]
-match <- match(paste0(annual$Permno, annual$YEAR), paste0(comp$LPERMNO, comp$year))
-annual$payout_gross <- comp$payout_gross[match]
-annual$div_gross <- comp$dvc[match]
-
-annual[is.na(payout_gross), payout_gross := 0]
-annual[is.na(div_gross), div_gross := 0]
-
-annual[, payout_block := (max_prc/100*payout_gross/log(1 + nstock_files))]
-annual[, div_block := (max_prc/100*div_gross/nstock_files)]
-
-annual[, payout_stock := sum(payout_block, na.rm = T), by = c("sbj_CIK", "YEAR")]
-annual[, payout_div_stock := sum(div_block, na.rm = T), by = c("sbj_CIK", "YEAR")]
-
-annual[, payout_outside := payout_stock - payout_block]
-annual[, payout_outside_div := payout_div_stock - div_block]
-
-annual[, L.payout_outside := c(NA, payout_outside[-.N]), by = c("sbj_CIK")]
-annual[, L.payout_outside_div := c(NA, payout_outside_div[-.N]), by = c("sbj_CIK")]
-
-m <- match(paste(stocks$PERMNO, stocks$YEAR), paste(annual$Permno, annual$YEAR))
-stocks[, `:=` (payout_outside =  annual$payout_outside[m], payout_outside_div = annual$payout_outside_div[m])]
-
-stocks[is.na(payout_outside), payout_outside := 0]
-stocks[is.na(payout_outside_div), payout_outside_div := 0]
-
-stocks[, payout_outside_ta := payout_outside/marcap]
-stocks[, payout_outside_div_ta := payout_outside_div/marcap]
-
-###################################
-###### merger instrument ##########
-###################################
-clean_phone <- function(x)
-{
-  x <- substr(as.numeric(gsub("[^0-9]", "", x)),1,10)
-  return(x)
-}
-load(, file =  "./CRSP_COMP/MA/mergers.rda")
-### find financial mergers
-mergers[, `:=` (sic = as.numeric(as.character(Target.Primary...SIC..Code)), fin = 0)]
-mergers[sic %/% 100 %in% c(60, 62, 61, 64, 65), fin := 1]
-mergers[, fin := 1]
-mergers <- mergers[fin == 1 & year %in% annual$YEAR]
-
-### use phone number to match
-mergers[, phone := clean_phone(Acquiror.Phone.Number)]
-mergers <- mergers[!is.na(phone)]
-
-annual[, phone := clean_phone(fil_business_address_phone)]
-match <- match(paste(annual$phone, annual$YEAR), paste(mergers$phone, mergers$year))
-
-### whether blockholder acquired a fin company
-annual[, merger := 0]
-annual[!is.na(match), merger := 1]
-annual[nstock_files > 100, merger := 0]
-annual[, fil_merger := max(merger), by = c("sbj_CIK", "YEAR")]
-
-m <- match(paste(stocks$PERMNO, stocks$YEAR), paste(annual$Permno, annual$YEAR))
-stocks$merger <- annual$fil_merger[m]
-stocks[is.na(merger), merger := 0]
-
-### load mergers from manual matching
-### it is taking from a previous working file
-add_mergers <- read.csv("/Volumes/ORHAHOG_USB/Blocks/Working Files/mergers_manual_match.csv")
-add_mergers <- add_mergers[add_mergers$mergers == 1,]
-stocks$merger[paste(stocks$PERMNO, stocks$YEAR) %in% paste(add_mergers$permno, add_mergers$year)] <- 1
-
-win <- function(x, eps = 0.01)
+win <- function(x, eps = 0.005)
 {
   up <- quantile(x, na.rm = T, 1 - eps)
   down <- quantile(x, na.rm = T, eps)
@@ -277,41 +200,27 @@ win <- function(x, eps = 0.01)
   x[x<down] <- down
   return(x)
 }
-stocks[, `:=` (lead.tobin = win(lead.tobin), inst_hold = win(inst_hold), growth = win(growth),
-              size = win(size), fixed = win(fixed), capex = win(capex), leverage = win(leverage),
-              amihud = win(amihud), block_hold = win(block_hold), num_block = win(num_block),
-              diversity_identity = win(diversity_identity), diversity_size = win(diversity_size),
-              diversity_turnover = win(diversity_turnover), payout_outside_ta = win(payout_outside_ta),
-              payout_outside_div_ta = win(payout_outside_div_ta))]
+stocks[, `:=` (lead.tobin = win(lead.tobin), inst_hold = win(inst_hold), 
+               growth = win(growth),
+               size = win(size), fixed = win(fixed), capex = win(capex), leverage = win(leverage),
+               amihud = win(amihud), block_hold = win(block_hold), num_block = win(num_block),
+               diversity_identity = win(diversity_identity), diversity_size = win(diversity_size),
+               diversity_turnover = win(diversity_turnover))]
 require(lfe)
+
+
+
 
 reg <- NULL
 reg[[1]] <- felm(lead.tobin  ~ inst_hold + growth + size + fixed + capex + leverage + 
-              amihud|PERMNO + ind_year|
-              (block_hold + diversity_identity ~ merger + payout_outside_div_ta)|
-              ind_year, data = stocks[num_block > 1])
+                   amihud + block_hold + diversity_identity|PERMNO + ind_year|
+                   0|ind_year, data = stocks[num_block > 1])
 reg[[2]] <- felm(lead.tobin  ~ inst_hold + growth + size + fixed + capex + leverage + 
-                   amihud|PERMNO + ind_year|
-                   (block_hold + diversity_size ~ merger + payout_outside_div_ta)|
-                   ind_year, data = stocks[num_block > 1])
+                   amihud + block_hold + diversity_size|PERMNO + ind_year|
+                   0|ind_year, data = stocks[num_block > 1])
 reg[[3]] <- felm(lead.tobin  ~ inst_hold + growth + size + fixed + capex + leverage + 
-                   amihud|PERMNO + ind_year|
-                   (block_hold + diversity_turnover ~ merger + payout_outside_div_ta)|
-                   ind_year, data = stocks[num_block > 1])
+                   amihud + block_hold + diversity_turnover |PERMNO + ind_year|
+                   0|ind_year, data = stocks[num_block > 1])
 require(stargazer)
 stargazer(reg, type = "text")
 
-
-
-
-reg <- felm(block_hold ~ merger +inst_hold + growth + size + fixed + capex + leverage + amihud  
-            |PERMNO + ind_year|0|ind_year, data = stocks[num_block > 1])
-summary(reg)
-
-reg <- felm(diversity_identity ~payout_outside_ta + merger +inst_hold + growth + size + fixed + capex + leverage + amihud  
-            |PERMNO + ind_year|0|ind_year, data = stocks[num_block > 1])
-summary(reg)
-
-
-hist(stocks$diversity_identity)
-hist(stocks$diversity_size)
