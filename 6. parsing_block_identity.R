@@ -1,9 +1,9 @@
-dir_in <- "/Volumes/ORHAHOG_USB/Blocks/Clean Forms/"
-dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
+dir_in <- "/Volumes/KINGSTON/Blocks/Clean Forms/"
+dir_out <- "/Volumes/KINGSTON/Blocks/Parsed Forms/"
 start_year <- 1994
 start_QTR <- 1
 
-end_year <- 2016
+end_year <- 2018
 end_QTR <- 4
 require(RSQLite)
 require(data.table)
@@ -123,9 +123,9 @@ for(yearqtr in dates$year_QTR)
   print(yearqtr)
   
   ### read master file
-  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".csv")
-  sec_header <- fread(sec_name)
-  
+  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".rds")
+  sec_header <- readRDS(sec_name)
+  sec_header <- as.data.table(sec_header)
   ### read filings
   dbname <- paste0(dir_in, "sc13_", yearqtr, ".sqlite")
   con <- dbConnect(drv=RSQLite::SQLite(), dbname=dbname)
@@ -146,5 +146,5 @@ for(yearqtr in dates$year_QTR)
   ### the rest is match with more diligent but slower function
   sec_header$item12[is.na(sec_header$item12)] <- sapply(res1$FILING[is.na(sec_header$item12)], get_phares_one_line)
   print(mean(is.na(sec_header$item12)))
-  write.csv(sec_header, sec_name, row.names = F)
+  saveRDS(sec_header, sec_name)
 }
