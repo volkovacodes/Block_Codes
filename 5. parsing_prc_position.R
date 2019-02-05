@@ -1,11 +1,10 @@
-dir_in <- "/Volumes/ORHAHOG_USB/Blocks/Clean Forms/"
-dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
+dir_in <- "/Volumes/KINGSTON/Blocks/Clean Forms/"
+dir_out <- "/Volumes/KINGSTON/Blocks/Parsed Forms/"
 start_year <- 1994
 start_QTR <- 1
 
-end_year <- 2016
+end_year <- 2018
 end_QTR <- 4
-
 require(RSQLite)
 require(data.table)
 ### generate sequence of quaters 
@@ -51,17 +50,17 @@ get.prc <- function(all_lines)
   {
     lines <- tolower(lines)
     # at first we locate a line
-  #  regex_find_line <- c("(?<=(row)).*(?=(type))",
-  #                       "(?<=(row)).*(?=(page))",
-  #                       "(?<=(row)).*(?=(cusip))",
-  #                       "(?<=(owned)).*(?=(type))",
-  #                       "(?<=(percent)).*(?=(type))")
-  #  for(regex_fl in regex_find_line)
-  #  {
- #     search.lines <- str_extract(lines, regex_fl)
-  #    search.lines <- search.lines[grep("(\\d|n/a|none)",prc, perl = T)]
-  #    if(length(prc) > 0) break
-  #  }
+    #  regex_find_line <- c("(?<=(row)).*(?=(type))",
+    #                       "(?<=(row)).*(?=(page))",
+    #                       "(?<=(row)).*(?=(cusip))",
+    #                       "(?<=(owned)).*(?=(type))",
+    #                       "(?<=(percent)).*(?=(type))")
+    #  for(regex_fl in regex_find_line)
+    #  {
+    #     search.lines <- str_extract(lines, regex_fl)
+    #    search.lines <- search.lines[grep("(\\d|n/a|none)",prc, perl = T)]
+    #    if(length(prc) > 0) break
+    #  }
     
     ### then search for percent expression
     regex_find_prc <- c("(\\d{1,4}((\\,|\\.)\\d{0,7}|)( |)\\%|\\d{0,3}(\\.\\d{1,7}|)( |)\\%)",
@@ -98,7 +97,7 @@ get.max.prc <- function(x)
 {
   x <- gsub("%", "", x)
   x <- unlist(str_split(x,"\\|"))
- # x[grep("none|n/a|-0-|less", x)] <- 0
+  # x[grep("none|n/a|-0-|less", x)] <- 0
   x <- as.numeric(as.character(x))
   ### this 9 comes from row (9) in form in some filings
   
@@ -125,8 +124,8 @@ for(yearqtr in dates$year_QTR)
   res <- dbSendQuery(con, "SELECT FILENAME, FILING FROM filings")
   res1 <- dbFetch(res,n=-1)
   
-  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".csv")
-  sec_header <- fread(sec_name)
+  sec_name <- paste0(dir_out, "Parsed_forms_", yearqtr, ".rds")
+  sec_header <- readRDS(sec_name)
   match <- match(sec_header$FILENAME, res1$FILENAME)
   
   lines <- lapply(res1$FILING, get.lines)
@@ -138,6 +137,6 @@ for(yearqtr in dates$year_QTR)
   max.prc[is.na(max.prc)] <- 0
   sec_header$max_prc <- max.prc[match]
   sec_header$prc <- prc[match] ### I keep in just in case
-  write.csv(sec_header, sec_name, row.names = F)
+  saveRDS(sec_header, sec_name)
 }
 
