@@ -1,9 +1,9 @@
-dir_in <- "/Volumes/ORHAHOG_USB/Blocks/Clean Forms/"
-dir_out <- "/Volumes/ORHAHOG_USB/Blocks/Parsed Forms/"
+dir_in <- "/Volumes/KINGSTON/Blocks/Clean Forms/"
+dir_out <- "/Volumes/KINGSTON/Blocks/Parsed Forms/"
 start_year <- 1994
 start_QTR <- 1
 
-end_year <- 2016
+end_year <- 2018
 end_QTR <- 4
 
 require(RSQLite)
@@ -71,6 +71,5 @@ for(yearqtr in dates$year_QTR)
   colnames(df_sbj) <- paste0("sbj_", colnames(df_sbj))
   
   out <- cbind(out, df, df_sbj)
-  write.csv(out, paste0(dir_out, "Parsed_forms_", yearqtr, ".csv"), row.names = F)
+  saveRDS(out, paste0(dir_out, "Parsed_forms_", yearqtr, ".rds"))
 }
-
