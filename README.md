@@ -1,4 +1,9 @@
 # Block_Codes
+
+This GitHub page describes construction of the data in the paper "Is Blockholder Diversity Detrimental?" by Miriam Schwartz-Ziv and Ekaterina Volkova (2020)
+
+The most recent version of the paper is avaliable as SSRN: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3621939
+
 # Step 1. Download Files.
 - download_forms.R file downloads sc13d/13g files and their amendments and puts them into SQL database.
 - this file downloads the list of all forms for each year from SEC website, 
