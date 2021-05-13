@@ -4,61 +4,62 @@ start_QTR <- 1
 end_year <- 2018
 end_QTR <- 8
 setwd("/Volumes/ORHAHOG_USB/Blocks/")
-require(data.table)
-require(Hmisc)
-require(data.table)
 
 ###########################################
 ####### construct SEC master file ########
 ###########################################
-qtr.master.file <- function(year, QTR)
-{
+qtr.master.file <- function(year, QTR){
+  
   require(data.table)
-  name <- paste0("https://www.sec.gov/Archives/edgar/full-index/", year,"/QTR",QTR,"/master.idx")
+  require(dplyr)
+  require(RCurl)
+  require(Hmisc)
+  
+  master.link <- paste0("https://www.sec.gov/Archives/edgar/full-index/", year,"/QTR",QTR,"/master.idx")
   print(sprintf("Downloading master file for quarter %d of year %s...", QTR, year))
-  master <- readLines(url(name))
-  master <- gsub("#", "", master) # R does not treat a comment sign well
-  start_ind <- grep("CIK|Company Name", master)[1]
-  master <- master[(start_ind+2):length(master)]
-  write(master, "tmp.csv")
-  master_table <- fread("tmp.csv", sep = "|")
-  rm(master)
-  colnames(master_table) <- c("cik", "name", "type", "date", "link")
-  master_table <- as.data.table(master_table)
-  master_table <- master_table[grep("SC 13(D|G)", type)]
-  master_table[, link := paste0("https://www.sec.gov/Archives/", link)]
-  master_table[, file := gsub(".*/", "", link)]
-  file.remove("tmp.csv")
+  
+  
+  master <- master.link %>%
+    getURL() %>%
+    gsub("#", "",.) %>%
+    fread(sep = "|", skip = 11) %>% 
+    `colnames<-`(c("cik", "name", "type", "date", "link")) %>%
+    filter(grepl("SC 13(D|G)", type)) %>%
+    mutate(link = paste0("https://www.sec.gov/Archives/", link)) %>%
+    mutate(file = gsub(".*/","",link))
+
+
   closeAllConnections()
-  return(master_table)
+  return(master)
 }
 ###########################################
 #### download all files into temp dir  ####
 ###########################################
-dwnld.files <- function(master)
-{
+### sometimes the SEC puts a limit on the number of downloads
+### put delay = T to account for that
+dwnld.files <- function(master, delay = T){
   require(RCurl)
   dir.create("temp_dir")
-  master <- as.data.frame(master)
-  master <- master[!duplicated(master$file),]
-  for(j in 1:length(master$file))
-  {
-    file <- NA
-    file_url <- as.character(master$link[j])
+  master <- master[!duplicated(file)]
+  
+  for(j in 1:length(master$file)){
+    if(delay = T) Sys.sleep(0.11)
     file_name <- paste0("./temp_dir/",master$file[j])
-    try(file <- getURL(file_url))
+    
+    file <- master$link[j] %>%
+      getURL %>%
+      try
+
     write(file, file_name)
   }
 }
 ###########################################
 ####### put all forms in SQdatabase #######
 ###########################################
-put.files.in.sql <- function(dbname)
-{
+put.files.in.sql <- function(dbname){
   library(DBI)
   library(RSQLite)
-  together <- function(x)
-  {
+  together <- function(x){
     return(paste(x, collapse = "\n"))
   }
   
@@ -70,8 +71,7 @@ put.files.in.sql <- function(dbname)
   files <- list.files(path)
   n <- length(files)
   step <- 500
-  for(i in 1:(n %/% step + 1))
-  {
+  for(i in 1:(n %/% step + 1)){
     start <- 1 + (i-1)*step
     end <- i*(step)
     ind <- start:min(end,n)
@@ -86,8 +86,8 @@ put.files.in.sql <- function(dbname)
   dbDisconnect(con)
   unlink("temp_dir", recursive = T)
 }
-get_dates <- function(start_year, start_QTR, end_year, end_QTR)
-{
+
+get_dates <- function(start_year, start_QTR, end_year, end_QTR){
   require(data.table)
   all_dates <- data.table(year = rep(1993:2050, 4))
   setkey(all_dates,year)
