@@ -43,7 +43,7 @@ dwnld.files <- function(master, delay = T){
   master <- master[!duplicated(file)]
   
   for(j in 1:length(master$file)){
-    if(delay = T) Sys.sleep(0.11)
+    if(delay == T) Sys.sleep(0.11)
     file_name <- paste0("./temp_dir/",master$file[j])
     
     file <- master$link[j] %>%
