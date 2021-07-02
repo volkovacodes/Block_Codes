@@ -1,3 +1,6 @@
+**!!! SEC is currently limits automatic downloads!!! The code is not adjusted to these changes **
+
+
 # Block_Codes
 
 This GitHub page describes construction of the data in the paper "Is Blockholder Diversity Detrimental?" by Miriam Schwartz-Ziv and Ekaterina Volkova (2020)
