@@ -1,5 +1,3 @@
-**!!! SEC is currently limits automatic downloads!!! The code is not adjusted to these changes **
-
 
 # Block_Codes
 
