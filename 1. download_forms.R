@@ -2,7 +2,11 @@
 start_QTR <- "2018Q4"
 end_QTR <- "2018Q4"
 
+### use this dir to download files
 out_dir <- "/Users/evolkova/Documents/Blocks/"
+if(!dir.exists(paste0(out_dir, "Forms/"))) dir.create(paste0(out_dir, "Forms/"))
+if(!dir.exists(paste0(out_dir, "Master/"))) dir.create(paste0(out_dir, "Master/"))
+
 
 ################################################################################
 ####################### construct SEC master file ##############################
@@ -86,7 +90,7 @@ put.files.in.sql <- function(dbname) {
     dbWriteTable(conn = con, name = "compsubm", data, append = T)
   }
   dbDisconnect(con)
-  unlink("temp_dir", recursive = T)
+  unlink(paste0(out_dir, "temp_dir"), recursive = T)
 }
 
 get_dates <- function(start_QTR, end_QTR) {
