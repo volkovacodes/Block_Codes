@@ -16,7 +16,8 @@ qtr.master.file <- function(date) {
   master.link <- paste0("https://www.sec.gov/Archives/edgar/full-index/", year(date), "/QTR", quarter(date), "/master.idx")
   print(sprintf("Downloading master file for quarter %d of year %s...", quarter(date), year(date)))
 
-  download.file(master.link, paste0(out_dir, "tmp.txt"), method = "curl")
+  download.file(master.link, paste0(out_dir, "tmp.txt"), 
+                headers = c("User-Agent" = "Ekaterina Volkova orhahog@gmail.com"))
 
   master <- paste0(out_dir, "tmp.txt") %>%
     readLines() %>%
@@ -40,18 +41,16 @@ qtr.master.file <- function(date) {
 ### put delay = T to account for that
 dwnld.files <- function(master, delay = T) {
   require(RCurl)
-  dir.create("temp_dir")
+  dir.create(paste0(out_dir,"temp_dir"))
   master <- master[!duplicated(file)]
 
   for (j in 1:length(master$file)) {
     if (delay == T) Sys.sleep(0.13)
-    file_name <- paste0("./temp_dir/", master$file[j])
+    file_name <- paste0(out_dir,"./temp_dir/", master$file[j])
 
-    file <- master$link[j] %>%
-      getURL() %>%
-      try()
+    download.file(master$link[j], file_name, quiet = T,
+                  headers = c("User-Agent" = "Ekaterina Volkova orhahog@gmail.com"))
 
-    write(file, file_name)
   }
 }
 ###########################################
@@ -75,6 +74,7 @@ put.files.in.sql <- function(dbname) {
     start <- 1 + (i - 1) * step
     end <- i * (step)
     ind <- start:min(end, n)
+    
     objects <- lapply(paste0(path, files[ind]), readLines)
     clean <- lapply(objects, together)
     data <- NULL
