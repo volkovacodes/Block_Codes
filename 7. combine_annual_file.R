@@ -1,21 +1,32 @@
-out_dir <- "/Users/evolkova/Documents/Blocks/Parsed Forms/"
+###############################################################################
+#################### Setting up ###############################################
+###############################################################################
+### folder with Parsed Forms
+out_dir <- "/Users/evolkova/Dropbox/DataY/Blocks/Parsed Forms/"
+### path to CRSP-Compustat merged file
+crsp_comp_path <- "/Users/evolkova/Dropbox/DataY/Compustat/crsp_compustat_1990_2021.csv"
+crsp_msf_path <- "/Users/evolkova/Dropbox/DataY/CRSP/MSF/CRSP_MSF.csv"
+last_year <- 2021
+require(pacman)
+p_load(data.table, lubridate, dplyr, stringr, Hmisc, httr)
 
-require(data.table)
-require(lubridate)
-### reading all forms
-files <- list.files(out_dir)
-files <- files[grepl("rds", files)]
-forms <- NULL
-for(fl in files) forms <- rbind(forms, readRDS(paste0(out_dir, fl)))
+###############################################################################
+############### Creating company-block-year table #############################
+###############################################################################
 
-forms[, DATE := ymd(DATE)]
-forms[, FILING_YEAR := year(DATE)]
-### this is a date when all the forms for the previous year 
-### should be filed
+
+### reading all forms, putting them in a table and converting dates
+forms <- list.files(out_dir, full.names = T) %>% 
+  str_subset("rds") %>% 
+  lapply(readRDS) %>%
+  rbindlist %>% 
+  mutate(DATE = ymd(DATE)) %>% 
+  mutate(FILING_YEAR = year(DATE), YEAR = year(DATE))
+
+### this is a date when all the forms for the previous year should be filed
 forms[, cut_of_date := ymd(paste0(FILING_YEAR, "-02-14"))]
-forms[, YEAR := FILING_YEAR]
-### if investor files 13G and holds below 10% he files before Feb 14th
-### i give them 5 "extra" days of delay
+
+### if investor files 13G and holds below 10% he files before Feb 14th I give them 5 "extra" days of delay
 forms[grepl("SC 13G", TYPE) & max_prc < 10 & DATE - cut_of_date <= 10, YEAR := FILING_YEAR - 1]
 
 forms[, cut_of_date := ymd(paste0(FILING_YEAR, "-01-01"))]
@@ -39,26 +50,63 @@ add_gaps <- function(forms, step) {
   return(forms)
 }
 
-forms <- add_gaps(forms, 4)
-forms <- add_gaps(forms, 3)
-forms <- add_gaps(forms, 2)
-forms[, `:=` (dif = NULL, gap = NULL)]
+forms <- forms %>% add_gaps(4) %>% add_gaps(3) %>% add_gaps(2) %>% mutate(dif = NULL, gap = NULL)
 
-last_year <- gsub(".*_", "", fl)
-last_year <- as.numeric(substr(last_year, 1 ,4)) - 1
-
+### forming annual file
 annual <- forms[YEAR <= last_year]
+setkey(annual, sbj_CIK, YEAR, fil_CIK)
+
+###############################################################################
+#################### Adding 13F filing information ############################
+###############################################################################
+
+start_date <- forms$DATE %>% min %>% floor_date("quater")
+end_date <- paste0(last_year, "1231") %>% ymd 
+dates <- seq(min(forms$DATE), max(forms$DATE), by = "quarters")
+
+
+qtr.master.file <- function(date) {
+  
+  master.link <- paste0("https://www.sec.gov/Archives/edgar/full-index/", year(date), "/QTR", quarter(date), "/master.idx")
+  print(sprintf("Downloading master file for quarter %d of year %s...", quarter(date), year(date)))
+  
+  download.file(master.link, paste0(out_dir, "tmp.txt"),
+                headers = c("User-Agent" = "Ekaterina Volkova orhahog@gmail.com")
+  )
+  
+  master <- paste0(out_dir, "tmp.txt") %>%
+    readLines() %>%
+    gsub("#", "", .) %>%
+    paste0(collapse = "\n") %>%
+    fread(sep = "|", skip = 11) %>%
+    `colnames<-`(c("cik", "name", "type", "date", "link")) %>%
+    filter(grepl("13F", type)) %>%
+    mutate(link = paste0("https://www.sec.gov/Archives/", link)) %>%
+    mutate(file = gsub(".*/", "", link))
+  
+  
+  closeAllConnections()
+  file.remove(paste0(out_dir, "tmp.txt"))
+  return(master)
+}
+
+master <- lapply(dates, qtr.master.file) %>% rbindlist %>% mutate(year = year(ymd(date)))
+
+annual$files_13F <- 0
+annual$files_13F[paste(as.numeric(annual$fil_CIK), annual$YEAR) %in% paste(master$cik, master$year)] <- 1
+
+###############################################################################
+#################### Match CRSP-COMPUSTAT INFO ############################
+###############################################################################
 
 ### matching permno and cusip to annual file
-comp <- fread("/Users/evolkova/Dropbox/DataY/Compustat/crsp_compustat_merger_annual.csv",
-              select = c("cik", "LPERMNO", "cusip", "fyear", "fyr"))
-
-crsp_monthly <- fread("/Users/evolkova/Dropbox/DataY/CRSP/MSF/CRSP_MSF.csv")
+comp <- fread(crsp_comp_path, select = c("cik", "LPERMNO", "cusip", "fyear", "fyr"))
+crsp_monthly <- fread(crsp_msf_path, select = c("PERMNO", "COMNAM", "RET", "PRC", "date", "CUSIP"))
 match <- match(as.numeric(annual$sbj_CIK), comp$cik)
 annual$Permno <- comp$LPERMNO[match]
 annual$cusip_comp <- comp$cusip[match]
 
-require(stringr)
+
 crsp_monthly <- crsp_monthly[!is.na(RET) & !is.na(PERMNO) & (str_length(COMNAM) > 2)]
 crsp_monthly[, cusip6 := substr(CUSIP, 1, 6)]
 match <- match(annual$CUSIP6, crsp_monthly$cusip6)
@@ -71,15 +119,6 @@ annual$Permno[is.na(annual$Permno)] <- crsp_monthly$PERMNO[match]
 match <- match(annual$Permno, crsp_monthly$PERMNO)
 annual$sbj_cname_crsp <- crsp_monthly$COMNAM[match]
 
-### mark institutional investors
-sec_master <- readRDS("/Users/evolkova/Dropbox/DataY/sec_master_13f_1994_2018.rds")
-colnames(sec_master) <- c("cik", "name", "form_type", "date", "filename", "link")
-setkey(annual, sbj_CIK, YEAR, fil_CIK)
-sec_master <- sec_master[grep("13F",sec_master$form_type)]
-sec_master[, year := year(date)]
-sec_master[, cik_year := paste(cik, year)]
-annual$files_13F <- 0
-annual$files_13F[paste(as.numeric(annual$fil_CIK), annual$YEAR) %in% sec_master$cik_year] <- 1
 
 ### calculate statistics for aggregate ownership, HHI, # blocks, etc
 annual[, `:=` (num_block = length(unique(fil_CIK)), block_hold = sum(max_prc)), by = c("sbj_CIK", "YEAR")]
@@ -91,55 +130,15 @@ annual[grepl("13D", TYPE) & files_13F == 1 & individual == 0, active_inst := 1]
 annual[grepl("13G", TYPE) & files_13F == 1 & individual == 0, passive_inst := 1]
 annual[, other := 1 - individual - active_inst - passive_inst]
 
-annual[, `:=` (tmp1 = block_portion*individual, tmp2 = block_portion*active_inst, tmp3 = block_portion*passive_inst, tmp4 = block_portion*other)]
-annual[, `:=` (HHI_group = sum(tmp1,na.rm=T)^2 + sum(tmp2,na.rm=T)^2 + sum(tmp3,na.rm=T)^2 + sum(tmp4,na.rm=T)^2), by = c("sbj_CIK", "YEAR")]
-annual[, `:=` (diversity_identity = 1 - HHI_group), by = c("sbj_CIK", "YEAR")]
-annual[, `:=` (tmp1 = NULL, tmp2 = NULL, tmp3 = NULL, tmp4 = NULL, HHI_group = NULL)]
-
-### size categories
-annual[, nstock_files := length(unique(sbj_CIK)), by = c("fil_CIK", "YEAR")]
-annual[, `:=` (size1 = 0, size2 = 0, size3  = 0, size4 = 0)]
-annual[nstock_files == 1, size1 := 1]
-annual[nstock_files %in% 2:20, size2 := 1]
-annual[nstock_files %in% 21:220, size3 := 1]
-annual[nstock_files > 220, size4 := 1]
-
-annual[, `:=` (tmp1 = block_portion*size1, tmp2 = block_portion*size2, tmp3 = block_portion*size3, tmp4 = block_portion*size4)]
-annual[, `:=` (HHI_group = sum(tmp1,na.rm=T)^2 + sum(tmp2,na.rm=T)^2 + sum(tmp3,na.rm=T)^2 + sum(tmp4,na.rm=T)^2), by = c("sbj_CIK", "YEAR")]
-annual[, `:=` (diversity_size = 1 - HHI_group), by = c("sbj_CIK", "YEAR")]
-annual[, `:=` (tmp1 = NULL, tmp2 = NULL, tmp3 = NULL, tmp4 = NULL, HHI_group = NULL)]
-
-### turnover categories
-#fwrite(annual, "tmp.csv")
-#annual <- fread("tmp.csv")
-annual[ , stake_size := (max_prc-5)/100*marcap]
-annual[max_prc < 5 , stake_size := 0]
-
-setkey(annual, fil_CIK, YEAR)
-annual[ , L.stake_size := c(NA, stake_size[-.N]), by = fil_CIK]
-annual[ , delta.stake_size := stake_size - L.stake_size]
-annual[is.na(delta.stake_size), delta.stake_size := 0]
-
-annual[, top := sum(abs(delta.stake_size), na.rm = T), by = c("fil_CIK", "YEAR")]        
-annual[, bottom := 1*sum(stake_size, na.rm = T) +  0*sum(L.stake_size, na.rm = T), 
-       by = c("fil_CIK", "YEAR")] 
-annual[, turn := top/bottom]
-
-annual <- setDT(annual)[, turn_q := cut(turn, quantile(turn, probs=0:4/4, na.rm = T),
-                                        include.lowest=TRUE, labels=FALSE), by = YEAR]
-
-
-annual[, `:=` (turn1 = 0, turn2 = 0, turn3  = 0, turn4 = 0)]
-annual[turn_q == 1, turn1 := 1]
-annual[turn_q == 2, turn2 := 1]
-annual[turn_q == 3, turn3 := 1]
-annual[, turn4 := 1 - turn1 - turn2 - turn3]
-
-annual[, `:=` (tmp1 = block_portion*turn1, tmp2 = block_portion*turn2, tmp3 = block_portion*turn3, tmp4 = block_portion*turn4)]
-annual[, `:=` (HHI_group = sum(tmp1,na.rm=T)^2 + sum(tmp2,na.rm=T)^2 + sum(tmp3,na.rm=T)^2 + sum(tmp4,na.rm=T)^2), by = c("sbj_CIK", "YEAR")]
-annual[, `:=` (diversity_turnover = 1 - HHI_group), by = c("sbj_CIK", "YEAR")]
-annual[, `:=` (stake_size = NULL, L.stake_size = NULL, delta.stake_size = NULL,
-               top = NULL, bottom = NULL, turn = NULL, turn_q = NULL,
-               tmp1 = NULL, tmp2 = NULL, tmp3 = NULL, tmp4 = NULL, HHI_group = NULL)]
-
+annual <- annual %>% filter(sbj_CIK != "0000000000")
 fwrite(annual, paste0(out_dir, "annual.csv"))
+
+out <- annual %>% select("fil_CIK", "fil_CNAME", "sbj_CNAME", "sbj_CIK", "YEAR" ,"max_prc", "individual", "active_inst", "passive_inst", "other", "files_13F") 
+out[, ever_filed_13F := max(files_13F), by = fil_CIK]
+
+out <- out[ever_filed_13F == 0 & active_inst == 0 & passive_inst == 0] %>% select("fil_CIK", "fil_CNAME", "sbj_CIK",  "sbj_CNAME","YEAR" ,"max_prc")#, "individual", "other")
+colnames(out) <- c("blockholder_CIK", "blockholder_name", "company_CIK", "company_name", "year", "position")#, "individual", "other")
+setkey(out, blockholder_CIK, company_CIK, year)
+
+fwrite(out, paste0(out_dir, "data_upload.csv"))
+
