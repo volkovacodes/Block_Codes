@@ -1,21 +1,32 @@
+###############################################################################
+#################### Setting up ###############################################
+###############################################################################
+require(pacman)
+p_load(data.table, lubridate, dplyr, stringr, Hmisc, httr, zoo, RCurl, DBI, RSQLite)
 
-start_QTR <- "2018Q4"
-end_QTR <- "2018Q4"
 
-### use this dir to download files
-out_dir <- "/Users/evolkova/Documents/Blocks/"
+### folder with Parsed Forms
+out_dir <- "/Users/evolkova/Dropbox/DataY/Blocks/Parsed Forms/"
+
 if(!dir.exists(paste0(out_dir, "Forms/"))) dir.create(paste0(out_dir, "Forms/"))
 if(!dir.exists(paste0(out_dir, "Master/"))) dir.create(paste0(out_dir, "Master/"))
+
+start <- 1994
+end <- 2021
+
+start_date <- paste(start, "0101") %>% ymd %>% floor_date("quater")
+end_date <- paste0(end, "1231") %>% ymd 
+dates <- seq(start_date, end_date, by = "quarters")
+
+###############################################################################
+#################### Functions  ###############################################
+###############################################################################
 
 
 ################################################################################
 ####################### construct SEC master file ##############################
 ################################################################################
 qtr.master.file <- function(date) {
-  require(data.table)
-  require(dplyr)
-  require(Hmisc)
-  require(httr)
 
   master.link <- paste0("https://www.sec.gov/Archives/edgar/full-index/", year(date), "/QTR", quarter(date), "/master.idx")
   print(sprintf("Downloading master file for quarter %d of year %s...", quarter(date), year(date)))
@@ -44,7 +55,7 @@ qtr.master.file <- function(date) {
 ################################################################################
 ### sometimes the SEC puts a limit on the number of downloads
 ### put delay = T to account for that
-dwnld.files <- function(master, delay = T) {
+dwnld.files <- function(master, delay = F) {
   require(RCurl)
   dir.create(paste0(out_dir, "temp_dir"))
   master <- master[!duplicated(file)]
@@ -53,18 +64,18 @@ dwnld.files <- function(master, delay = T) {
     if (delay == T) Sys.sleep(0.13)
     file_name <- paste0(out_dir, "./temp_dir/", master$file[j])
 
-    download.file(master$link[j], file_name,
+    res <- try(download.file(master$link[j], file_name,
       quiet = T,
       headers = c("User-Agent" = "Ekaterina Volkova orhahog@gmail.com")
-    )
+    ))
+    if(class(res) == "try-error") next
   }
 }
 ###########################################
 ####### put all forms in SQdatabase #######
 ###########################################
 put.files.in.sql <- function(dbname) {
-  library(DBI)
-  library(RSQLite)
+
   together <- function(x) {
     return(paste(x, collapse = "\n"))
   }
@@ -93,29 +104,6 @@ put.files.in.sql <- function(dbname) {
   unlink(paste0(out_dir, "temp_dir"), recursive = T)
 }
 
-get_dates <- function(start_QTR, end_QTR) {
-  require(data.table)
-  require(zoo)
-  require(lubridate)
-  require(dplyr)
-
-  end_QTR <- end_QTR %>%
-    as.yearqtr("%YQ%q") %>%
-    as.Date()
-
-  all_dates <- start_QTR %>%
-    as.yearqtr("%YQ%q") %>%
-    as.Date()
-
-  while (all_dates[length(all_dates)] < ymd(end_QTR)) {
-    all_dates <- c(all_dates, all_dates[length(all_dates)] %m+% months(3))
-  }
-
-  return(all_dates)
-}
-
-
-dates <- get_dates(start_QTR, end_QTR)
 for (i in 1:length(dates)) {
   print(Sys.time())
   master <- qtr.master.file(dates[i])
