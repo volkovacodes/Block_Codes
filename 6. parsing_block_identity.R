@@ -1,31 +1,23 @@
-start_QTR <- "2018Q4"
-end_QTR <- "2018Q4"
+###############################################################################
+#################### Setting up ###############################################
+###############################################################################
+require(pacman)
+p_load(data.table, lubridate, dplyr, stringr, Hmisc, httr, zoo, RCurl, DBI, RSQLite)
 
-### use this dir to download files
-out_dir <- "/Users/evolkova/Documents/Blocks/"
 
-### generate all dates
-get_dates <- function(start_QTR, end_QTR) {
-  require(data.table)
-  require(zoo)
-  require(lubridate)
-  require(dplyr)
+### folder with Parsed Forms
+out_dir <- "/Users/evolkova/Dropbox/DataY/Blocks/Parsed Forms/"
 
-  end_QTR <- end_QTR %>%
-    as.yearqtr("%YQ%q") %>%
-    as.Date()
+start <- 1994
+end <- 2021
 
-  all_dates <- start_QTR %>%
-    as.yearqtr("%YQ%q") %>%
-    as.Date()
+start_date <- paste(start, "0101") %>% ymd %>% floor_date("quater")
+end_date <- paste0(end, "1231") %>% ymd 
+dates <- seq(start_date, end_date, by = "quarters")
 
-  while (all_dates[length(all_dates)] < ymd(end_QTR)) {
-    all_dates <- c(all_dates, all_dates[length(all_dates)] %m+% months(3))
-  }
-
-  return(all_dates)
-}
-
+###############################################################################
+#################### Functions  ###############################################
+###############################################################################
 ### list of all identities codes
 code_list <- c("bd", "bk", "ic", "iv", "ia", "ep", "hc", "sa", "cp", "co", "pn", "in", "fi", "oo")
 ### I general regex to capture all variation of identity codes
@@ -120,9 +112,7 @@ get_phares_one_line <- function(text) {
   }
   return(item12)
 }
-
-
-dates <- get_dates(start_QTR, end_QTR)
+ 
 for (i in 1:length(dates)) {
   print(Sys.time())
   print(paste0("year: ", year(dates[i]), ", quarter: ", quarter(dates[i])))
