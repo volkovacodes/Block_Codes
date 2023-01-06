@@ -31,3 +31,11 @@ The most recent version of the paper is avaliable as SSRN: https://papers.ssrn.c
 # Step 6. Extract identity of blockholders.
 - parsing_block_identity.R extracts identity of blockholders from the information in the question 12.
 - here is the list of all identities (https://www.law.cornell.edu/cfr/text/17/240.13d-102)
+
+# Step 7. Aggregate information into blockholder-company-year panel
+
+# Step 8. Download insider ownership transactions 
+- Added in 2022 to improve data accuracy
+
+# Step 9. Add missing insider blocks 
+- Added in 2022 to improve data accuracy
