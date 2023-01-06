@@ -2,7 +2,8 @@
 #################### Setting up ###############################################
 ###############################################################################
 ### folder with Parsed Forms
-out_dir <- "/Users/evolkova/Dropbox/DataY/Blocks/Parsed Forms/"
+in_dir <- "/Users/evolkova/Dropbox/DataY/Blocks/Parsed Forms/"
+out_dir <- "/Users/evolkova/Dropbox/DataY/Blocks/Shared_Files/"
 ### path to CRSP-Compustat merged file
 crsp_comp_path <- "/Users/evolkova/Dropbox/DataY/Compustat/crsp_compustat_1990_2021.csv"
 crsp_msf_path <- "/Users/evolkova/Dropbox/DataY/CRSP/MSF/CRSP_MSF.csv"
@@ -16,7 +17,7 @@ p_load(data.table, lubridate, dplyr, stringr, Hmisc, httr)
 
 
 ### reading all forms, putting them in a table and converting dates
-forms <- list.files(out_dir, full.names = T) %>% 
+forms <- list.files(in_dir, full.names = T) %>% 
   str_subset("rds") %>% 
   lapply(readRDS) %>%
   rbindlist %>% 
@@ -136,9 +137,14 @@ fwrite(annual, paste0(out_dir, "annual.csv"))
 out <- annual %>% select("fil_CIK", "fil_CNAME", "sbj_CNAME", "sbj_CIK", "YEAR" ,"max_prc", "individual", "active_inst", "passive_inst", "other", "files_13F") 
 out[, ever_filed_13F := max(files_13F), by = fil_CIK]
 
-out <- out[ever_filed_13F == 0 & active_inst == 0 & passive_inst == 0] %>% select("fil_CIK", "fil_CNAME", "sbj_CIK",  "sbj_CNAME","YEAR" ,"max_prc")#, "individual", "other")
-colnames(out) <- c("blockholder_CIK", "blockholder_name", "company_CIK", "company_name", "year", "position")#, "individual", "other")
-setkey(out, blockholder_CIK, company_CIK, year)
+non_inst <- out[ever_filed_13F == 0 & active_inst == 0 & passive_inst == 0] %>% select("fil_CIK", "fil_CNAME", "sbj_CIK",  "sbj_CNAME","YEAR" ,"max_prc")#, "individual", "other")
+colnames(non_inst) <- c("blockholder_CIK", "blockholder_name", "company_CIK", "company_name", "year", "position")#, "individual", "other")
+setkey(non_inst, blockholder_CIK, company_CIK, year)
+fwrite(non_inst, paste0(out_dir, "non_inst_blocks.csv"))
 
-fwrite(out, paste0(out_dir, "data_upload.csv"))
 
+
+all_blocks <- out %>% select("fil_CIK", "fil_CNAME", "sbj_CIK",  "sbj_CNAME","YEAR" ,"max_prc")#, "individual", "other")
+colnames(all_blocks) <- c("blockholder_CIK", "blockholder_name", "company_CIK", "company_name", "year", "position")#, "individual", "other")
+setkey(all_blocks, blockholder_CIK, company_CIK, year)
+fwrite(all_blocks, paste0(out_dir, "all_blocks.csv"))
