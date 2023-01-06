@@ -101,3 +101,8 @@ addon <- addon[!duplicated(ind) & year %in% 1994:2021] %>% select("blockholder_C
 
 fwrite(addon, paste0(out_dir, "insider_addon.csv"))
 
+
+out <- rbind(annual, addon)
+setkey(out, company_CIK, blockholder_CIK, year)
+fwrite(out, paste0(out_dir, "blocks_with_insiders.csv"))
+
