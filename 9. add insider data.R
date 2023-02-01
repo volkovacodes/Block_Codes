@@ -14,8 +14,14 @@ redo <- F ### do we need to re-do insider master file?
 require(pacman)
 p_load(data.table, lubridate, dplyr, stringr, Hmisc, httr, rvest, magrittr, parallel)
 
+master_13F <- fread(paste0(out_dir, "master_13F.csv"))
+
+
 annual <- fread(paste0(out_dir, "all_blocks.csv"))
 annual[, id := paste(company_CIK, blockholder_CIK, year)]
+annual[, files_13F := 0]
+annual[blockholder_CIK %in% master_13F$cik, files_13F := 1]
+
 ###############################################################################
 #################### Getting number of SHROUT ##################################
 ###############################################################################
@@ -101,8 +107,10 @@ addon <- addon[!duplicated(ind) & year %in% 1994:2021] %>% select("blockholder_C
 
 fwrite(addon, paste0(out_dir, "insider_addon.csv"))
 
-
+addon$files_13F <- 0
+annual$id <- NULL
 out <- rbind(annual, addon)
 setkey(out, company_CIK, blockholder_CIK, year)
-fwrite(out, paste0(out_dir, "blocks_with_insiders.csv"))
+out[, position := format(round(position, 2), nsmall = 2)]
+fwrite(out, paste0(out_dir, "blockholders.csv"))
 
