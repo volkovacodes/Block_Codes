@@ -11,7 +11,7 @@ out_dir <- "/Users/evolkova/Dropbox/DataY/Blocks/Parsed Forms/"
 start <- 1994
 end <- 2021
 
-start_date <- paste(start, "0101") %>% ymd %>% floor_date("quater")
+start_date <- paste(start, "0101") %>% ymd %>% floor_date("quarter")
 end_date <- paste0(end, "1231") %>% ymd 
 dates <- seq(start_date, end_date, by = "quarters")
 
