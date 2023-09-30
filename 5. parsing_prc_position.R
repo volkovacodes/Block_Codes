@@ -48,20 +48,6 @@ get.prc <- function(all_lines) {
 
   locate.prc <- function(lines) {
     lines <- tolower(lines)
-    # at first we locate a line
-    #  regex_find_line <- c("(?<=(row)).*(?=(type))",
-    #                       "(?<=(row)).*(?=(page))",
-    #                       "(?<=(row)).*(?=(cusip))",
-    #                       "(?<=(owned)).*(?=(type))",
-    #                       "(?<=(percent)).*(?=(type))")
-    #  for(regex_fl in regex_find_line)
-    #  {
-    #     search.lines <- str_extract(lines, regex_fl)
-    #    search.lines <- search.lines[grep("(\\d|n/a|none)",prc, perl = T)]
-    #    if(length(prc) > 0) break
-    #  }
-
-    ### then search for percent expression
     regex_find_prc <- c(
       "(\\d{1,4}((\\,|\\.)\\d{0,7}|)( |)\\%|\\d{0,3}(\\.\\d{1,7}|)( |)\\%)",
       "-0-",
